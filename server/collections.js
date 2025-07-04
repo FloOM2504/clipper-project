@@ -41,14 +41,22 @@ const clipperDir = path.join(__dirname, '../public/uploads/clippers')
 if (!fs.existsSync(clipperDir)) fs.mkdirSync(clipperDir, { recursive: true })
 
 async function sliceImageIntoParts(imagePath, outputDir, collectionId, partCount) {
-  const { width, height } = await sharp(imagePath).metadata()
+  // Weißraum trimmen (mit erhöhtem Tolerance-Wert)
+  const trimmedBuffer = await sharp(imagePath)
+    .flatten({ background: { r: 255, g: 255, b: 255 } })
+    .trim()
+    .toBuffer()
+
+  // Metadaten vom getrimmten Bild
+  const { width, height } = await sharp(trimmedBuffer).metadata()
   const partWidth = Math.floor(width / partCount)
 
+  // In gleich breite Parts schneiden
   const tasks = []
   for (let i = 0; i < partCount; i++) {
     const outputPath = path.join(outputDir, `collection_${collectionId}_${i + 1}.jpg`)
     tasks.push(
-      sharp(imagePath)
+      sharp(trimmedBuffer)
         .extract({ left: i * partWidth, top: 0, width: partWidth, height })
         .toFile(outputPath)
     )

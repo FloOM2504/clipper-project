@@ -57,7 +57,7 @@ async function fetchCollections() {
           <img src="/uploads/clippers/collection_${
             col.id
           }_${i}.jpg" class="clipper-silhouette" alt="Clipper"
-            onerror="this.src='clipper_silhouette_transparent.png'">
+            onerror="this.src='images/clipper_silhouette_transparent.png'">
           <span>#${i}</span>
         </div>
       `
@@ -115,41 +115,42 @@ async function editCollection(id) {
 
   card.innerHTML = `
     <input type="text" id="edit_name_${id}" value="${col.name}" placeholder="Name" />
-    <input type="text" id="edit_desc_\${id}" value="\${col.description}" placeholder="Beschreibung" />
+    <input type="text" id="edit_desc_${id}" value="\${col.description}" placeholder="Beschreibung" />
     <label>Bild-URL (optional):</label>
     <div class="image-input-group">
-      <input type="url" id="edit_img_url_\${id}" value="\${col.image_url}" placeholder="Bild-URL" />
-      <label for="edit_img_file_\${id}" class="upload-label" title="Bild hochladen">
+      <input type="url" id="edit_img_url_${id}" value="\${col.image_url}" placeholder="Bild-URL" />
+      <label for="edit_img_file_${id}" class="upload-label" title="Bild hochladen">
         <i class="fa-solid fa-image"></i>
-        <input type="file" id="edit_img_file_\${id}" accept="image/*" hidden />
+        <input type="file" id="edit_img_file_${id}" accept="image/*" hidden />
       </label>
     </div>
-    <img id="edit_img_preview_\${id}" src="\${col.image_url}" class="upload-preview" />
-    <input type="number" id="edit_size_\${id}" value="\${col.size}" min="1" placeholder="Größe" />
-    <button onclick="saveCollectionEdit(\${id})">💾 Speichern</button>
-    <button onclick="cancelCollectionEdit(\${id})">❌ Abbrechen</button>
-    <button onclick="deleteCollection(\${id})" style="background-color: #ff3b30; color: white; margin-top: 12px;">
+    <img id="edit_img_preview_${id}" src="\${col.image_url}" class="upload-preview" />
+    <input type="number" id="edit_size_${id}" value="\${col.size}" min="1" placeholder="Größe" />
+    <button onclick="saveCollectionEdit(${id})">💾 Speichern</button>
+    <button onclick="cancelCollectionEdit(${id})">❌ Abbrechen</button>
+    <button onclick="deleteCollection(${id})" style="background-color: #ff3b30; color: white; margin-top: 12px;">
       🗑️ Kollektion löschen
     </button>
   `
+
+  document.getElementById(`edit_img_file_${id}`).addEventListener('change', function () {
+    const file = this.files[0]
+    const preview = document.getElementById(`edit_img_preview_${id}`)
+    const urlInput = document.getElementById(`edit_img_url_${id}`)
+
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = function (e) {
+        preview.src = e.target.result
+        preview.style.display = 'block'
+      }
+      reader.readAsDataURL(file)
+      urlInput.value = ''
+    }
+  })
+
   card.classList.add('editing')
 }
-
-document.getElementById(`edit_img_file_${id}`).addEventListener('change', function () {
-  const file = this.files[0]
-  const preview = document.getElementById(`edit_img_preview_${id}`)
-  const urlInput = document.getElementById(`edit_img_url_${id}`)
-
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = function (e) {
-      preview.src = e.target.result
-      preview.style.display = 'block'
-    }
-    reader.readAsDataURL(file)
-    urlInput.value = ''
-  }
-})
 
 async function cancelCollectionEdit(id) {
   await fetchCollections()

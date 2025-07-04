@@ -55,7 +55,7 @@
         <input type="text" id="description" placeholder="Beschreibung" />
         <div class="image-input-group">
           <input type="url" id="image_url" placeholder="Bild-URL der Collection (optional)" />
-          <label for="image_file" class="upload-label" title="Bild hochladen">
+          <label for="edit_image_file_${id}" class="upload-label" title="Bild hochladen">
             <i class="fa-solid fa-image"></i>
             <input type="file" id="image_file" accept="image/*" hidden />
           </label>
@@ -91,6 +91,11 @@
           <option value="8">8er</option>
           <option value="custom">Sonder</option>
         </select>
+        <select id="completionFilter" class="input-like select-like">
+          <option value="">Alle</option>
+          <option value="complete">Vollständig</option>
+          <option value="incomplete">Unvollständig</option>
+        </select>
       </div>
 
       <div id="collections"></div>
@@ -100,7 +105,9 @@
       <span class="modal-close">×</span>
       <img class="modal-content" id="modalImage" />
     </div>
-
+    <script src="/js/collections.js"></script>
+    <script src="/js/ui.js"></script>
+    <script src="/js/main.js"></script>
     <script>
       let userRole = null
       let currentEditId = null
@@ -117,16 +124,17 @@
         // Schnellzugriff: Map<collection_id, Set<ownedPosition>>
         const ownershipMap = new Map()
         for (const o of ownerships) {
+          if (!ownershipMap.has(o.collection_id)) {
+            ownershipMap.set(o.collection_id, new Set())
+          }
           if (o.owned) {
-            if (!ownershipMap.has(o.collection_id)) {
-              ownershipMap.set(o.collection_id, new Set())
-            }
             ownershipMap.get(o.collection_id).add(o.position)
           }
         }
 
         const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || ''
         const sizeFilter = document.getElementById('sizeFilter')?.value || ''
+        const completionFilter = document.getElementById('completionFilter')?.value || ''
         const container = document.getElementById('collections')
         container.innerHTML = ''
 
@@ -137,7 +145,13 @@
             (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) ||
             parseInt(sizeFilter) === col.size
 
-          return matchesName && matchesSize
+          const ownedCount = ownershipMap.get(col.id)?.size || 0
+          const matchesCompletion =
+            completionFilter === '' ||
+            (completionFilter === 'complete' && ownedCount === col.size) ||
+            (completionFilter === 'incomplete' && ownedCount !== col.size)
+
+          return matchesName && matchesSize && matchesCompletion
         })
 
         for (const col of filtered) {
@@ -151,48 +165,55 @@
           card.classList.add(`size-${col.size}`)
 
           let html = `
-                        <div class="collection-header">
-                          ${
-                            userRole === 'admin'
-                              ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
-                              : ''
-                          }
-                          <div class="collection-info">
-                            <img src="${col.image_url}" onclick="enlargeImage('${
-            col.image_url
-          }')" class="collection-img" />
-                            <div>
-                              <h2>${col.name}</h2>
-                              <p><span class="collection-tag">${col.size}er Serie</span> ${
-            col.description || ''
-          }</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="clipper-grid">
-                      `
-
+          <div class="collection-header">
+            <div class="collection-info">
+              <img
+                src="${col.image_url}"
+                onclick="enlargeImage('${col.image_url}')"
+                class="collection-img"
+              />
+              <div>
+                <h2>${col.name}</h2>
+                <p>
+                  <span class="collection-tag">${col.size}er Serie</span>
+                  ${col.description || ''}
+                </p>
+              </div>
+            </div>
+            ${
+              userRole === 'admin'
+                ? `<div class="collection-actions">
+                     <button
+                       class="menu-trigger"
+                       aria-label="Mehr Aktionen"
+                       onclick="openContextMenu(event, ${col.id})">
+                       ⋮
+                     </button>
+                   </div>`
+                : ''
+            }
+          </div>
+          <div class="clipper-grid">
+          `
           for (let i = 1; i <= col.size; i++) {
             const isOwned = ownedSet.has(i)
             html += `
-                      <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-                          data-col-id="${col.id}" data-position="${i}">
-                        <img src="/uploads/clippers/collection_${
-                          col.id
-                        }_${i}.jpg?t=${Date.now()}" class="clipper-silhouette" alt="Clipper" onerror="this.src='clipper_silhouette_transparent.png'">
-                        <span>#${i}</span>
-                      </div>
-                    `
+                                <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+                                    data-col-id="${col.id}" data-position="${i}">
+                                  <img src="/uploads/clippers/collection_${
+                                    col.id
+                                  }_${i}.jpg?t=${Date.now()}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
+                                  <span>#${i}</span>
+                                </div>
+                              `
           }
-
           html += `
-                    </div>
-                    <div class="progress">
-                      <span>${ownedSet.size} von ${col.size} markiert</span>
-                      <progress max="${col.size}" value="${ownedSet.size}"></progress>
-                    </div>
-                  `
-
+          </div>
+          <div class="progress">
+            <span>${ownedSet.size} von ${col.size} markiert</span>
+            <progress max="${col.size}" value="${ownedSet.size}"></progress>
+          </div>
+        `
           card.innerHTML = html
           container.appendChild(card)
 
@@ -383,18 +404,19 @@
         [2, 4, 8]
           .map(
             (n) => `
-    <button type="button" class="type-option" data-value="${n}">${n}er</button>
-  `
+        <button type="button" class="type-option" data-value="${n}">${n}er</button>
+      `
           )
           .join('') +
         `
-    <button type="button" class="type-option" data-value="custom">Sonder</button>
-  `
+        <button type="button" class="type-option" data-value="custom">Sonder</button>
+      `
 
       document.getElementById('collection_type').style.display = 'none'
       document.getElementById('collection_type').insertAdjacentElement('afterend', typeGroup)
       document.getElementById('searchInput').addEventListener('input', fetchCollections)
       document.getElementById('sizeFilter').addEventListener('change', fetchCollections)
+      document.getElementById('completionFilter').addEventListener('change', fetchCollections)
 
       const customSizeInput = document.getElementById('custom_size')
       typeGroup.addEventListener('click', (e) => {
@@ -421,50 +443,57 @@
         if (!card || !col) return
 
         card.innerHTML = `
-          <input type="text" id="edit_name_${id}" value="${col.name}" placeholder="Name" />
-          <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
+          <div class="collection-header">…</div>
+            <div class="card-body">
+              <input type="text" id="edit_name_${id}" value="${col.name}" placeholder="Name" />
+              <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
 
-          <label>Bild-URL (optional):</label>
-          <div class="image-input-group">
-            <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
-          <label for="image_file" class="upload-label" title="Bild hochladen">
-            <i class="fa-solid fa-image"></i>
-            <input type="file" id="image_file" accept="image/*" hidden />
-          </label>
-          </div>
-          <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
+              <label>Bild-URL (optional):</label>
+              <div class="image-input-group">
+                <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
+              <label for="edit_image_file_${id}" class="upload-label" title="Bild hochladen">
+                <i class="fa-solid fa-image"></i>
+                <input type="file" id="edit_image_file${id}" accept="image/*" hidden />
+              </label>
+              </div>
+              <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
 
-          <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
-
-          <div class="edit-actions">
-            <button class="save-btn"    onclick="saveCollectionEdit(${id})"><i class="fa-solid fa-check"></i></button>
-            <button class="cancel-btn"  onclick="cancelCollectionEdit(${id})"><i class="fa-solid fa-xmark"></i></button>
-            <button class="delete-btn"  onclick="deleteCollection(${id})"><i class="fa-solid fa-trash"></i></button>
-          </div>
-        `
-
-        card.classList.add('editing')
+              <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
+            </div>
+            <div class="edit-actions">
+              <button class="save-btn"    onclick="saveCollectionEdit(${id})"><i class="fa-solid fa-check"></i></button>
+              <button class="cancel-btn"  onclick="cancelCollectionEdit(${id})"><i class="fa-solid fa-xmark"></i></button>
+              <button class="delete-btn"  onclick="deleteCollection(${id})"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            `
 
         // Vorschau aktualisieren bei Datei-Upload
-        document.getElementById(`edit_img_file_${id}`).addEventListener('change', function () {
-          const file = this.files[0]
-          const preview = document.getElementById(`edit_img_preview_${id}`)
-          const urlInput = document.getElementById(`edit_img_url_${id}`)
+        const fileInput = document.getElementById(`edit_img_file_${id}`)
+        if (fileInput) {
+          fileInput.addEventListener('change', function () {
+            const file = this.files[0]
+            const preview = document.getElementById(`edit_img_preview_${id}`)
+            const urlInput = document.getElementById(`edit_img_url_${id}`)
 
-          if (file) {
-            const reader = new FileReader()
-            reader.onload = function (e) {
-              preview.src = e.target.result
-              preview.style.display = 'block'
+            if (file) {
+              const reader = new FileReader()
+              reader.onload = (e) => {
+                preview.src = e.target.result
+                preview.style.display = 'block'
+              }
+              reader.readAsDataURL(file)
+              urlInput.value = ''
             }
-            reader.readAsDataURL(file)
-            urlInput.value = ''
-          }
-        })
+          })
+        }
+
+        card.classList.add('editing')
       }
 
       async function cancelCollectionEdit(id) {
-        await fetchSingleCollection(id)
+        const card = document.querySelector(`.card[data-id='${id}']`)
+        card.classList.remove('editing') // entferne sofort das Edit-Flag
+        await fetchSingleCollection(id) // rendere nur diese Karte neu
         currentEditId = null
       }
 
@@ -472,60 +501,62 @@
         const res = await fetch('/api/collections')
         const { collections, ownerships } = await res.json()
         const col = collections.find((c) => c.id === id)
-        const ownershipForCol = ownerships.filter((o) => o.collection_id === id && o.owned)
-        const ownedSet = new Set(ownershipForCol.map((o) => o.position))
+        const ownedSet = new Set(
+          ownerships.filter((o) => o.collection_id === id && o.owned).map((o) => o.position)
+        )
 
         const card = document.querySelector(`.card[data-id='${id}']`)
         if (!card) return
 
         let html = `
-          <div class="collection-header">
-            ${
-              userRole === 'admin'
-                ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
-                : ''
-            }
-            <div class="collection-info">
-              <img src="${col.image_url}" onclick="enlargeImage('${
-          col.image_url
-        }')" class="collection-img" />
-              <div>
-                <h2>${col.name}</h2>
-                <p><span class="collection-tag">${col.size}er Serie</span> ${
+            <div class="collection-header">
+              <div class="collection-info">
+                <img
+                  src="${col.image_url}"
+                  onclick="enlargeImage('${col.image_url}')"
+                  class="collection-img"
+                />
+                <div>
+                  <h2>${col.name}</h2>
+                  <p><span class="collection-tag">${col.size}er Serie</span> ${
           col.description || ''
         }</p>
+                </div>
               </div>
+              ${
+                userRole === 'admin'
+                  ? `<div class="collection-actions">
+                      <button
+                        class="menu-trigger"
+                        aria-label="Mehr Aktionen"
+                        onclick="openContextMenu(event, ${col.id})">
+                        ⋮
+                      </button>
+                    </div>`
+                  : ''
+              }
             </div>
-          </div>
-          <div class="clipper-grid">
-        `
+            <div class="clipper-grid">
+              `
 
         for (let i = 1; i <= col.size; i++) {
           const isOwned = ownedSet.has(i)
           const imgUrl = `/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}`
           html += `
-                    <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-                        data-col-id="${col.id}" data-position="${i}">
-                      <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='clipper_silhouette_transparent.png'">
-                      <span>#${i}</span>
-                    </div>
-                  `
+                          <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+                              data-col-id="${col.id}" data-position="${i}">
+                            <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
+                            <span>#${i}</span>
+                          </div>
+                        `
         }
 
         html += `</div>
-          <div class="progress">
-            <span>${ownedSet.size} von ${col.size} markiert</span>
-            <progress max="${col.size}" value="${ownedSet.size}"></progress>
-          </div>
-        `
-
-        card.classList.remove('editing')
-        card.classList.add('restoring')
-
-        setTimeout(() => {
-          card.classList.remove('restoring')
-        }, 200)
-
+            <div class="progress">
+              <span>${ownedSet.size} von ${col.size} markiert</span>
+              <progress max="${col.size}" value="${ownedSet.size}"></progress>
+            </div>
+          `
         card.innerHTML = html
 
         // Slot-Klick-Verhalten reaktivieren
@@ -559,8 +590,9 @@
         const name = document.getElementById(`edit_name_${id}`).value
         const description = document.getElementById(`edit_desc_${id}`).value
         const imageUrlInput = document.getElementById(`edit_img_url_${id}`).value
-        const imageFile = document.getElementById(`edit_img_file_${id}`).files[0]
-        let image_url = imageUrlInput
+        const fileInput = document.getElementById(`edit_img_file_${id}`)
+        const imageFile = fileInput ? fileInput.files[0] : null
+        let image_url = document.getElementById(`edit_img_url_${id}`).value
 
         // Falls ein neues Bild hochgeladen wurde, hat das Vorrang
         if (imageFile) {
@@ -659,6 +691,33 @@
         } else {
           alert('Fehler beim Löschen')
         }
+      }
+
+      function openContextMenu(e, colId) {
+        e.stopPropagation()
+        // vorhandene Menüs entfernen
+        document.querySelectorAll('.context-menu').forEach((m) => m.remove())
+
+        // neues Menü anlegen
+        const menu = document.createElement('ul')
+        menu.className = 'context-menu'
+        menu.innerHTML = `
+                              <li onclick="editCollection(${colId}); removeContextMenu();">Bearbeiten</li>
+                              <li onclick="deleteCollection(${colId}); removeContextMenu();">Löschen</li>
+                            `
+        document.body.append(menu)
+
+        // Positionierung
+        menu.style.top = `${e.pageY}px`
+        menu.style.left = `${e.pageX}px`
+
+        // Klick außerhalb schließt das Menü
+        document.addEventListener('click', removeContextMenu, { once: true })
+      }
+
+      // entfernt das Menü wieder
+      function removeContextMenu() {
+        document.querySelectorAll('.context-menu').forEach((m) => m.remove())
       }
     </script>
   </body>
