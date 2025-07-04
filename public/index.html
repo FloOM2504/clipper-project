@@ -95,6 +95,7 @@
           <option value="">Alle</option>
           <option value="complete">Vollständig</option>
           <option value="incomplete">Unvollständig</option>
+          <option value="mine">Meine Kollektionen</option>
         </select>
       </div>
 
@@ -145,11 +146,19 @@
             (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) ||
             parseInt(sizeFilter) === col.size
 
-          const ownedCount = ownershipMap.get(col.id)?.size || 0
-          const matchesCompletion =
-            completionFilter === '' ||
-            (completionFilter === 'complete' && ownedCount === col.size) ||
-            (completionFilter === 'incomplete' && ownedCount !== col.size)
+          const ownedCount = (ownershipMap.get(col.id) || new Set()).size
+          let matchesCompletion = true
+          switch (completionFilter) {
+            case 'complete':
+              matchesCompletion = ownedCount === col.size
+              break
+            case 'incomplete':
+              matchesCompletion = ownedCount < col.size
+              break
+            case 'mine':
+              matchesCompletion = ownedCount > 0
+              break
+          }
 
           return matchesName && matchesSize && matchesCompletion
         })
@@ -203,7 +212,6 @@
                                   <img src="/uploads/clippers/collection_${
                                     col.id
                                   }_${i}.jpg?t=${Date.now()}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
-                                  <span>#${i}</span>
                                 </div>
                               `
           }
@@ -546,7 +554,6 @@
                           <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
                               data-col-id="${col.id}" data-position="${i}">
                             <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
-                            <span>#${i}</span>
                           </div>
                         `
         }
