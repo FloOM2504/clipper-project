@@ -56,11 +56,20 @@ async function sliceImageIntoParts(imagePath, outputDir, collectionId, partCount
   await Promise.all(tasks)
 }
 
-// GET all collections
+// GET all collections + ownerships for logged-in user
 router.get('/collections', requireLogin, (req, res) => {
-  db.all('SELECT * FROM collections', [], (err, rows) => {
+  db.all('SELECT * FROM collections', [], (err, collections) => {
     if (err) return res.status(500).send(err)
-    res.json(rows)
+
+    db.all(
+      'SELECT collection_id, position, owned FROM ownership WHERE user_id = ?',
+      [req.session.userId],
+      (err2, ownerships) => {
+        if (err2) return res.status(500).send(err2)
+
+        res.json({ collections, ownerships })
+      }
+    )
   })
 })
 

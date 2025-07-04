@@ -127,7 +127,6 @@ body[data-theme='dark'] #themeToggleBtn {
 .clipper-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-  gap: 10px;
   justify-items: center;
 }
 
@@ -138,12 +137,14 @@ body[data-theme='dark'] #themeToggleBtn {
   justify-content: flex-start;
   background: #fff;
   border-radius: 10px;
-  padding: 6px;
+  padding: 4px 2px;
   margin: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   transition: transform 0.1s ease;
   text-align: center;
   width: 56px;
+  max-height: 100%;
+  height: 100%;
 }
 
 .clipper-slot:hover {
@@ -151,12 +152,16 @@ body[data-theme='dark'] #themeToggleBtn {
 }
 
 .clipper-silhouette {
-  width: 36px;
   height: auto;
+  max-height: none;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .progress {
-  margin-top: 16px;
+  flex-shrink: 0;
+  margin-top: 12px;
   font-size: 14px;
   color: #555;
 }
@@ -462,47 +467,6 @@ body[data-theme='dark'] button#addCollectionBtn:hover {
   color: #000 !important;
 }
 
-.image-input-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.image-input-group input[type='url'] {
-  flex-grow: 1;
-}
-
-.upload-label {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  width: 44px;
-  cursor: pointer;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  transition: filter 0.2s;
-}
-
-.upload-label i {
-  font-size: 20px;
-  color: #ccc;
-}
-
-.upload-label:hover i {
-  color: #fdd835;
-}
-
-body[data-theme='dark'] .upload-label i {
-  color: #888;
-}
-
-body[data-theme='dark'] .upload-label:hover i {
-  color: #fdd835;
-}
-
 .upload-preview {
   margin-top: 8px;
   margin-bottom: 16px; /* 👈 das ist neu */
@@ -588,34 +552,21 @@ body[data-theme='dark'] .input-like {
   display: block;
 }
 
-@keyframes slideFadeIn {
-  0% {
+@keyframes fadeZoom {
+  from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: scale(0.98);
   }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
 }
 
-@keyframes slideFadeOut {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-.card.editing {
-  animation: slideFadeIn 0.25s ease-out;
-}
-
+.card.editing,
 .card.restoring {
-  animation: slideFadeOut 0.2s ease-in;
+  animation: fadeZoom 0.15s ease-out;
+  will-change: opacity, transform;
 }
 
 .clipper-header {
@@ -646,7 +597,8 @@ body[data-theme='dark'] .clipper-title {
 
 .clipper-slot span {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 12px;
+  flex-shrink: 0;
   color: #888;
 }
 
@@ -668,17 +620,8 @@ input,
 
 /* === Fix für Progress-Anzeige unten in Collection-Karten === */
 .card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.clipper-grid {
-  flex-grow: 1;
-}
-
-.progress {
-  margin-top: auto;
+  height: 320px;
+  overflow: hidden;
 }
 
 /* === Layout-Fix für Collection-Container === */
@@ -688,25 +631,21 @@ input,
 
 /* Fortschrittsleiste unten fixieren */
 .card {
-  display: flex;
-  flex-direction: column;
   justify-content: space-between;
-  height: 100%;
   min-height: 100%;
 }
 
 /* Clipper-Gitter darf sich vertikal strecken */
 .clipper-grid {
-  flex-grow: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
   gap: 10px;
   justify-items: center;
-}
+  place-items: center;
 
-/* Fortschrittsbereich bleibt unten */
-.progress {
-  margin-top: auto;
+  flex-grow: 1;
+  overflow: hidden;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  align-items: start;
 }
 
 /* Card-Container bricht nur komplette Cards um */
@@ -721,14 +660,6 @@ input,
   flex: 0 0 auto;
   width: fit-content;
   max-width: 100%;
-}
-
-.collection-header {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
 }
 
 .collection-info h2 {
@@ -756,4 +687,168 @@ input,
   top: 8px;
   right: 8px;
   z-index: 10;
+}
+
+/* ————————————————————————————
+   Kartenhöhe fixieren
+   ———————————————————————————— */
+.card {
+  height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden; /* Fortschritt & Header bleiben sichtbar */
+}
+
+/* ————————————————————————————
+   Flex-Container statt Grid
+   ———————————————————————————— */
+.clipper-grid {
+  flex: 1; /* wächst, um den Platz zwischen Header+Progress auszufüllen */
+  display: flex;
+  align-items: center; /* vertikal zentriert */
+  justify-content: space-around; /* gleichmäßige Abstände */
+  padding: 0 8px; /* links/rechts etwas Luft */
+}
+
+/* ————————————————————————————
+   Slot füllt in der Höhe
+   ———————————————————————————— */
+.clipper-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 4px; /* seitlicher Abstand zwischen Slots */
+  box-sizing: border-box;
+}
+
+/* ————————————————————————————
+   Bild nutzt volle Slot-Höhe
+   ———————————————————————————— */
+.clipper-silhouette {
+  max-height: 100%; /* Bild darf bis ganz oben/unten gehen */
+  width: auto; /* proportional skalieren */
+  object-fit: contain; /* kein Abschneiden, kein Verzerren */
+}
+
+/* ————————————————————————————
+   Nummer immer unten
+   ———————————————————————————— */
+.clipper-slot span {
+  flex-shrink: 0;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* in Edit-Modus die Card auf Auto-Height umstellen */
+.card.editing,
+.card.restoring {
+  height: auto !important;
+  overflow: visible !important;
+  /* optional: ein bisschen Padding, damit nichts am Rand klebt */
+  padding-bottom: 16px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.edit-actions button {
+  flex: 1;
+  padding: 0; /* kein extra Innenabstand */
+  height: 40px; /* feste Höhe */
+  border: none;
+  border-radius: 8px; /* abgerundete Ecken */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px; /* Icon-Größe */
+  cursor: pointer;
+  transition: background 0.2s;
+  background-color: #3a3a3c;
+  color: #f5f5f7;
+}
+
+/* Speichern = Grün */
+.edit-actions .save-btn {
+  background-color: #2e7d32;
+  color: white;
+}
+
+/* Abbrechen = Grau */
+.edit-actions .cancel-btn {
+  background-color: #6c6c6c;
+  color: white;
+}
+
+/* Löschen = Rot */
+.edit-actions .delete-btn {
+  background-color: #c62828;
+  color: white;
+}
+
+/* Hover-Effekte */
+.edit-actions .save-btn:hover {
+  background-color: #388e3c;
+}
+.edit-actions .cancel-btn:hover {
+  background-color: #7e7e7e;
+}
+.edit-actions .delete-btn:hover {
+  background-color: #d32f2f;
+}
+
+/* === Upload-Icon per Flex neben dem URL-Feld zentrieren === */
+.image-input-group {
+  display: flex !important;
+  align-items: center !important; /* vertikal zentriert */
+  gap: 8px !important; /* Abstand zwischen Feld und Icon */
+}
+
+/* Input dehnt sich, Icon behält feste Größe */
+.image-input-group input[type='url'] {
+  flex: 1 !important; /* nimmt restliche Breite ein */
+  margin: 0 !important; /* vorherige margin-bottom entfernen */
+}
+
+/* Label als fester Kasten neben dem Input */
+.upload-label {
+  position: static !important; /* keine absolute Position mehr */
+  transform: none !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+
+/* Icon im Label */
+.upload-label i,
+.upload-label .upload-icon {
+  font-size: 18px;
+  line-height: 1;
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.upload-label:hover i {
+  color: #fdd835;
+}
+
+body[data-theme='dark'] .upload-label i {
+  color: #888;
+}
+
+body[data-theme='dark'] .upload-label:hover i {
+  color: #fdd835;
 }

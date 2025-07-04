@@ -111,90 +111,92 @@
       }
 
       async function fetchCollections() {
-        // Daten vom Server holen
         const res = await fetch('/api/collections')
-        const data = await res.json()
+        const { collections, ownerships } = await res.json()
 
-        // Such- und Filterwerte auslesen
+        // Schnellzugriff: Map<collection_id, Set<ownedPosition>>
+        const ownershipMap = new Map()
+        for (const o of ownerships) {
+          if (o.owned) {
+            if (!ownershipMap.has(o.collection_id)) {
+              ownershipMap.set(o.collection_id, new Set())
+            }
+            ownershipMap.get(o.collection_id).add(o.position)
+          }
+        }
+
         const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || ''
         const sizeFilter = document.getElementById('sizeFilter')?.value || ''
-
-        // Bestehende Collection-Karten leeren
         const container = document.getElementById('collections')
         container.innerHTML = ''
 
-        // 🔍 Filter anwenden (nach Name & Größe)
-        const filtered = data.filter((col) => {
+        const filtered = collections.filter((col) => {
           const matchesName = col.name.toLowerCase().includes(searchTerm)
-
           const matchesSize =
-            sizeFilter === '' || // Kein Filter aktiv
-            (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) || // Sondergröße
-            parseInt(sizeFilter) === col.size // Standardgröße
+            sizeFilter === '' ||
+            (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) ||
+            parseInt(sizeFilter) === col.size
 
           return matchesName && matchesSize
         })
 
-        // Für jede gefilterte Collection...
         for (const col of filtered) {
-          // Besitzdaten vom Server holen
-          const ownershipRes = await fetch(`/api/ownership/${col.id}`)
-          const ownership = await ownershipRes.json()
-          const ownedSet = new Set(ownership.filter((o) => o.owned).map((o) => o.position))
+          const ownedSet = ownershipMap.get(col.id) || new Set()
 
-          // Collection-Karte erzeugen
           const card = document.createElement('div')
           card.className = 'card'
           card.setAttribute('data-id', col.id)
-
-          // ✨ Dynamische Breite:
-          const cardWidth = col.size * 60 + (col.size - 1) * 10 + 40 // 60px pro Clipper + 10px gap + Puffer
+          const cardWidth = col.size * 60 + (col.size - 1) * 10 + 40
           card.setAttribute('style', `flex: 0 1 ${cardWidth}px`)
+          card.classList.add(`size-${col.size}`)
 
           let html = `
-      <div class="collection-header">
-        ${
-          userRole === 'admin'
-            ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
-            : ''
-        }
-        <div class="collection-info">
-          <img src="${col.image_url}" onclick="enlargeImage('${
+                        <div class="collection-header">
+                          ${
+                            userRole === 'admin'
+                              ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
+                              : ''
+                          }
+                          <div class="collection-info">
+                            <img src="${col.image_url}" onclick="enlargeImage('${
             col.image_url
           }')" class="collection-img" />
-          <div>
-            <h2>${col.name}</h2>
-            <p><span class="collection-tag">${col.size}er Serie</span> ${col.description || ''}</p>
-          </div>
-        </div>
-      </div>
-      <div class="clipper-grid">
-    `
+                            <div>
+                              <h2>${col.name}</h2>
+                              <p><span class="collection-tag">${col.size}er Serie</span> ${
+            col.description || ''
+          }</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="clipper-grid">
+                      `
 
           for (let i = 1; i <= col.size; i++) {
             const isOwned = ownedSet.has(i)
             html += `
-        <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-            data-col-id="${col.id}" data-position="${i}">
-          <img src="/uploads/clippers/collection_${
-            col.id
-          }_${i}.jpg" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
-          <span>#${i}</span>
-        </div>
-      `
+                      <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+                          data-col-id="${col.id}" data-position="${i}">
+                        <img src="/uploads/clippers/collection_${
+                          col.id
+                        }_${i}.jpg?t=${Date.now()}" class="clipper-silhouette" alt="Clipper" onerror="this.src='clipper_silhouette_transparent.png'">
+                        <span>#${i}</span>
+                      </div>
+                    `
           }
 
-          html += `</div>
-      <div class="progress">
-        <span>${ownedSet.size} von ${col.size} markiert</span>
-        <progress max="${col.size}" value="${ownedSet.size}"></progress>
-      </div>
-    `
+          html += `
+                    </div>
+                    <div class="progress">
+                      <span>${ownedSet.size} von ${col.size} markiert</span>
+                      <progress max="${col.size}" value="${ownedSet.size}"></progress>
+                    </div>
+                  `
 
           card.innerHTML = html
           container.appendChild(card)
 
-          // Klickverhalten zum Markieren hinzufügen
+          // Klickverhalten zum Markieren
           card.querySelectorAll('.clipper-slot').forEach((slot) => {
             slot.addEventListener('click', async (e) => {
               e.preventDefault()
@@ -210,10 +212,7 @@
                 body: JSON.stringify({ collection_id: colId, position: pos, owned })
               })
 
-              // UI aktualisieren
               slot.classList.toggle('owned', !!owned)
-
-              // Fortschrittsanzeige anpassen
               const progressBar = slot.closest('.card').querySelector('progress')
               const label = slot.closest('.card').querySelector('.progress span')
               const ownedNow = slot.closest('.card').querySelectorAll('.clipper-slot.owned').length
@@ -416,8 +415,8 @@
         currentEditId = id
 
         const res = await fetch('/api/collections')
-        const data = await res.json()
-        const col = data.find((c) => c.id === id)
+        const { collections } = await res.json()
+        const col = collections.find((c) => c.id === id)
         const card = document.querySelector(`.card[data-id='${id}']`)
         if (!card || !col) return
 
@@ -428,20 +427,20 @@
           <label>Bild-URL (optional):</label>
           <div class="image-input-group">
             <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
-            <label for="edit_img_file_${id}" class="upload-label" title="Bild hochladen">
-              <i class="fa-solid fa-image"></i>
-              <input type="file" id="edit_img_file_${id}" accept="image/*" hidden />
-            </label>
+          <label for="image_file" class="upload-label" title="Bild hochladen">
+            <i class="fa-solid fa-image"></i>
+            <input type="file" id="image_file" accept="image/*" hidden />
+          </label>
           </div>
           <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
 
           <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
 
-          <button onclick="saveCollectionEdit(${id})">💾 Speichern</button>
-          <button onclick="cancelCollectionEdit(${id})">❌ Abbrechen</button>
-          <button onclick="deleteCollection(${id})" style="background-color: #ff3b30; color: white; margin-top: 12px;">
-            🗑️ Kollektion löschen
-          </button>
+          <div class="edit-actions">
+            <button class="save-btn"    onclick="saveCollectionEdit(${id})"><i class="fa-solid fa-check"></i></button>
+            <button class="cancel-btn"  onclick="cancelCollectionEdit(${id})"><i class="fa-solid fa-xmark"></i></button>
+            <button class="delete-btn"  onclick="deleteCollection(${id})"><i class="fa-solid fa-trash"></i></button>
+          </div>
         `
 
         card.classList.add('editing')
@@ -471,11 +470,10 @@
 
       async function fetchSingleCollection(id) {
         const res = await fetch('/api/collections')
-        const data = await res.json()
-        const col = data.find((c) => c.id === id)
-        const ownershipRes = await fetch(`/api/ownership/${col.id}`)
-        const ownership = await ownershipRes.json()
-        const ownedSet = new Set(ownership.filter((o) => o.owned).map((o) => o.position))
+        const { collections, ownerships } = await res.json()
+        const col = collections.find((c) => c.id === id)
+        const ownershipForCol = ownerships.filter((o) => o.collection_id === id && o.owned)
+        const ownedSet = new Set(ownershipForCol.map((o) => o.position))
 
         const card = document.querySelector(`.card[data-id='${id}']`)
         if (!card) return
@@ -504,13 +502,14 @@
 
         for (let i = 1; i <= col.size; i++) {
           const isOwned = ownedSet.has(i)
+          const imgUrl = `/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}`
           html += `
-            <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-                data-col-id="${col.id}" data-position="${i}">
-              <img src="clipper_silhouette_transparent.png" class="clipper-silhouette" alt="Clipper">
-              <span>#${i}</span>
-            </div>
-          `
+                    <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+                        data-col-id="${col.id}" data-position="${i}">
+                      <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='clipper_silhouette_transparent.png'">
+                      <span>#${i}</span>
+                    </div>
+                  `
         }
 
         html += `</div>
@@ -598,7 +597,8 @@
           body: JSON.stringify({ name, description, image_url, size })
         })
 
-        fetchCollections()
+        await fetchSingleCollection(id)
+        currentEditId = null
       }
 
       function toggleTheme() {
@@ -644,14 +644,18 @@
         }
       })
 
+      // Und beim Fenster-Resize
+      window.addEventListener('resize', adjustClipperHeights)
+
       async function deleteCollection(id) {
         const res = await fetch(`/api/collections/${id}`, {
           method: 'DELETE'
         })
 
         if (res.ok) {
-          currentEditId = null // 🧹 Edit-Zustand zurücksetzen
-          fetchCollections()
+          currentEditId = null
+          const card = document.querySelector(`.card[data-id="${id}"]`)
+          if (card) card.remove()
         } else {
           alert('Fehler beim Löschen')
         }

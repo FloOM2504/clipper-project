@@ -197,3 +197,23 @@ async function deleteCollection(id) {
     alert('Fehler beim Löschen')
   }
 }
+
+// Rundumberechnung der Bildhöhe nach jedem Rendern
+function adjustClipperHeights() {
+  document.querySelectorAll('.card').forEach((card) => {
+    const headerH = card.querySelector('.collection-header').offsetHeight
+    const progressH = card.querySelector('.progress').offsetHeight
+    const available = card.clientHeight - headerH - progressH - 16 // 16px Puffer
+
+    card.querySelectorAll('.clipper-silhouette').forEach((img) => {
+      img.style.height = available + 'px'
+    })
+  })
+}
+
+// Nach jedem Neuladen der Collections aufrufen
+const originalFetch = fetchCollections
+fetchCollections = async () => {
+  await originalFetch()
+  adjustClipperHeights()
+}
