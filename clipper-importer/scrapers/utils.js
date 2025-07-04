@@ -50,7 +50,7 @@ async function fetchExistingCollections() {
   const res = await axios.get('http://localhost:3000/api/collections', {
     headers: { Cookie: cookieJar }
   })
-  existingNames = res.data.map((c) => c.name.toLowerCase())
+  existingNames = res.data.collections.map((c) => c.name.toLowerCase())
   console.log(`🧠 Duplikat-Cache geladen: ${existingNames.length} Namen`)
 }
 

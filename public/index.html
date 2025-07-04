@@ -95,7 +95,7 @@
           <option value="">Alle</option>
           <option value="complete">Vollständig</option>
           <option value="incomplete">Unvollständig</option>
-          <option value="mine">Meine Kollektionen</option>
+          <option value="mine" selected>Meine Kollektionen</option>
         </select>
       </div>
 
@@ -449,11 +449,11 @@
         const col = collections.find((c) => c.id === id)
         const card = document.querySelector(`.card[data-id='${id}']`)
         if (!card || !col) return
-
+        const safeName = (col.name || '').replace(/"/g, '&quot;')
         card.innerHTML = `
           <div class="collection-header">…</div>
             <div class="card-body">
-              <input type="text" id="edit_name_${id}" value="${col.name}" placeholder="Name" />
+              <input type="text" id="edit_name_${id}" value="${safeName}" placeholder="Name"/>
               <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
 
               <label>Bild-URL (optional):</label>
@@ -663,7 +663,7 @@
         const savedTheme = localStorage.getItem('clipper-theme') || 'light'
         document.body.dataset.theme = savedTheme
         document.getElementById('themeToggleBtn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'
-
+        document.getElementById('completionFilter').value = 'mine'
         // Neue Session-Prüfung
         try {
           const res = await fetch('/api/session')
