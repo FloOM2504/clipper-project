@@ -1,0 +1,15 @@
+
+/* 🌗 Sanfter Dark/Light-Mode Wechsel */
+body {
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.card,
+button,
+input,
+.collection-tag,
+.clipper-slot,
+#themeToggleBtn,
+#logoutBtn {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}

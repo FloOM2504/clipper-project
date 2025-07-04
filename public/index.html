@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clipper Collection Tracker</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/theme-transition.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body onload="document.getElementById('imageModal').style.display = 'none';">
+    <div id="loginContainer" class="login-container">
+      <form id="loginForm">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Benutzername" required />
+        <input type="password" id="password" placeholder="Passwort" required />
+        <input type="checkbox" id="rememberMe" />
+        <label for="rememberMe">Eingeloggt bleiben</label>
+        <button type="submit">Einloggen</button>
+      </form>
+      <form id="registerForm">
+        <h2>Neu registrieren</h2>
+        <input type="text" id="newUsername" placeholder="Benutzername" required />
+        <input
+          type="password"
+          id="newPassword"
+          placeholder="Passwort"
+          autocomplete="off"
+          required
+        />
+        <button type="submit">Registrieren</button>
+      </form>
+    </div>
+
+    <div id="appContainer" class="container" style="display: none">
+      <div class="header">
+        <div class="clipper-header">
+          <img src="images/clipper_logo.png" alt="Clipper Logo" class="clipper-logo" />
+          <span class="clipper-title">
+            Meine
+            <strong>Clipper Collections</strong>
+          </span>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <button id="themeToggleBtn" onclick="toggleTheme()">🌙</button>
+          <button id="logoutBtn" class="logout-button">🚪 Logout</button>
+        </div>
+      </div>
+
+      <form id="collectionForm" style="display: none">
+        <input type="text" id="name" placeholder="Name der Collection" required />
+        <input type="text" id="description" placeholder="Beschreibung" />
+        <div class="image-input-group">
+          <input type="url" id="image_url" placeholder="Bild-URL der Collection (optional)" />
+          <label for="image_file" class="upload-label" title="Bild hochladen">
+            <i class="fa-solid fa-image"></i>
+            <input type="file" id="image_file" accept="image/*" hidden />
+          </label>
+          <img id="image_preview" class="upload-preview" style="display: none" />
+        </div>
+        <select id="collection_type" onchange="toggleCustomSize(this)">
+          <option value="2">2er Kollektion</option>
+          <option value="4">4er Kollektion</option>
+          <option value="8">8er Kollektion</option>
+          <option value="custom">Sonderkollektion</option>
+        </select>
+        <input
+          type="number"
+          id="custom_size"
+          placeholder="Größe bei Sonderkollektion"
+          style="display: none"
+          min="1"
+        />
+        <button type="submit">➕ Collection hinzufügen</button>
+      </form>
+
+      <div class="filter-bar">
+        <input
+          id="searchInput"
+          type="text"
+          class="input-like"
+          placeholder="🔍 Sammlung suchen..."
+        />
+        <select id="sizeFilter" class="input-like select-like">
+          <option value="">Alle Größen</option>
+          <option value="2">2er</option>
+          <option value="4">4er</option>
+          <option value="8">8er</option>
+          <option value="custom">Sonder</option>
+        </select>
+      </div>
+
+      <div id="collections"></div>
+    </div>
+
+    <div id="imageModal" class="modal" onclick="this.style.display='none'">
+      <span class="modal-close">×</span>
+      <img class="modal-content" id="modalImage" />
+    </div>
+
+    <script>
+      let userRole = null
+      let currentEditId = null
+
+      function toggleCustomSize(select) {
+        document.getElementById('custom_size').style.display =
+          select.value === 'custom' ? 'block' : 'none'
+      }
+
+      async function fetchCollections() {
+        // Daten vom Server holen
+        const res = await fetch('/api/collections')
+        const data = await res.json()
+
+        // Such- und Filterwerte auslesen
+        const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || ''
+        const sizeFilter = document.getElementById('sizeFilter')?.value || ''
+
+        // Bestehende Collection-Karten leeren
+        const container = document.getElementById('collections')
+        container.innerHTML = ''
+
+        // 🔍 Filter anwenden (nach Name & Größe)
+        const filtered = data.filter((col) => {
+          const matchesName = col.name.toLowerCase().includes(searchTerm)
+
+          const matchesSize =
+            sizeFilter === '' || // Kein Filter aktiv
+            (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) || // Sondergröße
+            parseInt(sizeFilter) === col.size // Standardgröße
+
+          return matchesName && matchesSize
+        })
+
+        // Für jede gefilterte Collection...
+        for (const col of filtered) {
+          // Besitzdaten vom Server holen
+          const ownershipRes = await fetch(`/api/ownership/${col.id}`)
+          const ownership = await ownershipRes.json()
+          const ownedSet = new Set(ownership.filter((o) => o.owned).map((o) => o.position))
+
+          // Collection-Karte erzeugen
+          const card = document.createElement('div')
+          card.className = 'card'
+          card.setAttribute('data-id', col.id)
+
+          // ✨ Dynamische Breite:
+          const cardWidth = col.size * 60 + (col.size - 1) * 10 + 40 // 60px pro Clipper + 10px gap + Puffer
+          card.setAttribute('style', `flex: 0 1 ${cardWidth}px`)
+
+          let html = `
+      <div class="collection-header">
+        ${
+          userRole === 'admin'
+            ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
+            : ''
+        }
+        <div class="collection-info">
+          <img src="${col.image_url}" onclick="enlargeImage('${
+            col.image_url
+          }')" class="collection-img" />
+          <div>
+            <h2>${col.name}</h2>
+            <p><span class="collection-tag">${col.size}er Serie</span> ${col.description || ''}</p>
+          </div>
+        </div>
+      </div>
+      <div class="clipper-grid">
+    `
+
+          for (let i = 1; i <= col.size; i++) {
+            const isOwned = ownedSet.has(i)
+            html += `
+        <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+            data-col-id="${col.id}" data-position="${i}">
+          <img src="/uploads/clippers/collection_${
+            col.id
+          }_${i}.jpg" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
+          <span>#${i}</span>
+        </div>
+      `
+          }
+
+          html += `</div>
+      <div class="progress">
+        <span>${ownedSet.size} von ${col.size} markiert</span>
+        <progress max="${col.size}" value="${ownedSet.size}"></progress>
+      </div>
+    `
+
+          card.innerHTML = html
+          container.appendChild(card)
+
+          // Klickverhalten zum Markieren hinzufügen
+          card.querySelectorAll('.clipper-slot').forEach((slot) => {
+            slot.addEventListener('click', async (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+
+              const colId = parseInt(slot.dataset.colId)
+              const pos = parseInt(slot.dataset.position)
+              const owned = !slot.classList.contains('owned') ? 1 : 0
+
+              await fetch('/api/ownership', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ collection_id: colId, position: pos, owned })
+              })
+
+              // UI aktualisieren
+              slot.classList.toggle('owned', !!owned)
+
+              // Fortschrittsanzeige anpassen
+              const progressBar = slot.closest('.card').querySelector('progress')
+              const label = slot.closest('.card').querySelector('.progress span')
+              const ownedNow = slot.closest('.card').querySelectorAll('.clipper-slot.owned').length
+              const max = parseInt(progressBar.getAttribute('max'))
+              progressBar.value = ownedNow
+              label.textContent = `${ownedNow} von ${max} markiert`
+            })
+          })
+        }
+      }
+
+      async function toggleClipper(event, elem, colId, pos) {
+        if (event) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+
+        const owned = !elem.classList.contains('owned') ? 1 : 0
+
+        await fetch('/api/ownership', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collection_id: colId, position: pos, owned })
+        })
+
+        fetchCollections()
+      }
+
+      function enlargeImage(url) {
+        const modal = document.getElementById('imageModal')
+        const img = document.getElementById('modalImage')
+        img.src = url
+        modal.style.display = 'flex' // ← wichtig! Nicht "block"
+      }
+
+      document.getElementById('collectionForm').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const name = document.getElementById('name').value
+        const description = document.getElementById('description').value
+        const imageFile = document.getElementById('image_file').files[0]
+        const imageUrlInput = document.getElementById('image_url').value
+        let image_url = imageUrlInput
+
+        if (imageFile) {
+          const formData = new FormData()
+          formData.append('image', imageFile)
+
+          const uploadRes = await fetch('/api/upload-image', {
+            method: 'POST',
+            body: formData
+          })
+
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json()
+            image_url = uploadData.image_url
+          } else {
+            alert('Bild-Upload fehlgeschlagen')
+            return
+          }
+        }
+        const type = document.getElementById('collection_type').value
+        const size =
+          type === 'custom'
+            ? parseInt(document.getElementById('custom_size').value)
+            : parseInt(type)
+
+        await fetch('/api/collections', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description, image_url, size })
+        })
+
+        // Formular und Datei-Feld zurücksetzen
+        e.target.reset()
+        document.getElementById('image_file').value = ''
+
+        fetchCollections()
+      })
+
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const username = document.getElementById('username').value
+        const password = document.getElementById('password').value
+
+        const remember = document.getElementById('rememberMe').checked
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, remember })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          userRole = data.role
+          document.getElementById('loginContainer').style.display = 'none'
+          document.getElementById('appContainer').style.display = 'block'
+          if (userRole === 'admin')
+            document.getElementById('collectionForm').style.display = 'block'
+          fetchCollections()
+        } else {
+          alert('Login fehlgeschlagen')
+        }
+      })
+
+      document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const username = document.getElementById('newUsername').value
+        const password = document.getElementById('newPassword').value
+
+        try {
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          })
+
+          const result = await res.json()
+          if (res.ok) {
+            alert('Benutzer registriert – jetzt einloggen')
+          } else {
+            alert('Fehler: ' + (result.error || 'Unbekannter Fehler bei der Registrierung'))
+          }
+        } catch (err) {
+          alert('Verbindungsfehler bei der Registrierung')
+        }
+      })
+
+      document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await fetch('/api/logout')
+        location.reload()
+      })
+
+      const collectionTypeSelect = document.getElementById('collection_type')
+      if (collectionTypeSelect) {
+        collectionTypeSelect.classList.add('button-like-select')
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          document.getElementById('imageModal').style.display = 'none'
+        }
+      })
+
+      document.getElementById('image_file').addEventListener('change', function () {
+        const file = this.files[0]
+        const preview = document.getElementById('image_preview')
+
+        if (file) {
+          const reader = new FileReader()
+          reader.onload = function (e) {
+            preview.src = e.target.result
+            preview.style.display = 'block'
+          }
+          reader.readAsDataURL(file)
+        } else {
+          preview.style.display = 'none'
+          preview.src = ''
+        }
+      })
+
+      async function logout() {
+        await fetch('/api/logout')
+        location.reload()
+      }
+
+      const typeGroup = document.createElement('div')
+      typeGroup.className = 'collection-type-group'
+      typeGroup.innerHTML =
+        [2, 4, 8]
+          .map(
+            (n) => `
+    <button type="button" class="type-option" data-value="${n}">${n}er</button>
+  `
+          )
+          .join('') +
+        `
+    <button type="button" class="type-option" data-value="custom">Sonder</button>
+  `
+
+      document.getElementById('collection_type').style.display = 'none'
+      document.getElementById('collection_type').insertAdjacentElement('afterend', typeGroup)
+      document.getElementById('searchInput').addEventListener('input', fetchCollections)
+      document.getElementById('sizeFilter').addEventListener('change', fetchCollections)
+
+      const customSizeInput = document.getElementById('custom_size')
+      typeGroup.addEventListener('click', (e) => {
+        if (!e.target.matches('.type-option')) return
+        document.querySelectorAll('.type-option').forEach((btn) => btn.classList.remove('active'))
+        e.target.classList.add('active')
+        const value = e.target.dataset.value
+        document.getElementById('collection_type').value = value
+        customSizeInput.style.display = value === 'custom' ? 'block' : 'none'
+      })
+
+      async function editCollection(id) {
+        // Wenn bereits eine andere Collection im Bearbeitungsmodus ist → zurückbauen
+        if (currentEditId !== null && currentEditId !== id) {
+          await fetchSingleCollection(currentEditId)
+        }
+
+        currentEditId = id
+
+        const res = await fetch('/api/collections')
+        const data = await res.json()
+        const col = data.find((c) => c.id === id)
+        const card = document.querySelector(`.card[data-id='${id}']`)
+        if (!card || !col) return
+
+        card.innerHTML = `
+          <input type="text" id="edit_name_${id}" value="${col.name}" placeholder="Name" />
+          <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
+
+          <label>Bild-URL (optional):</label>
+          <div class="image-input-group">
+            <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
+            <label for="edit_img_file_${id}" class="upload-label" title="Bild hochladen">
+              <i class="fa-solid fa-image"></i>
+              <input type="file" id="edit_img_file_${id}" accept="image/*" hidden />
+            </label>
+          </div>
+          <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
+
+          <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
+
+          <button onclick="saveCollectionEdit(${id})">💾 Speichern</button>
+          <button onclick="cancelCollectionEdit(${id})">❌ Abbrechen</button>
+          <button onclick="deleteCollection(${id})" style="background-color: #ff3b30; color: white; margin-top: 12px;">
+            🗑️ Kollektion löschen
+          </button>
+        `
+
+        card.classList.add('editing')
+
+        // Vorschau aktualisieren bei Datei-Upload
+        document.getElementById(`edit_img_file_${id}`).addEventListener('change', function () {
+          const file = this.files[0]
+          const preview = document.getElementById(`edit_img_preview_${id}`)
+          const urlInput = document.getElementById(`edit_img_url_${id}`)
+
+          if (file) {
+            const reader = new FileReader()
+            reader.onload = function (e) {
+              preview.src = e.target.result
+              preview.style.display = 'block'
+            }
+            reader.readAsDataURL(file)
+            urlInput.value = ''
+          }
+        })
+      }
+
+      async function cancelCollectionEdit(id) {
+        await fetchSingleCollection(id)
+        currentEditId = null
+      }
+
+      async function fetchSingleCollection(id) {
+        const res = await fetch('/api/collections')
+        const data = await res.json()
+        const col = data.find((c) => c.id === id)
+        const ownershipRes = await fetch(`/api/ownership/${col.id}`)
+        const ownership = await ownershipRes.json()
+        const ownedSet = new Set(ownership.filter((o) => o.owned).map((o) => o.position))
+
+        const card = document.querySelector(`.card[data-id='${id}']`)
+        if (!card) return
+
+        let html = `
+          <div class="collection-header">
+            ${
+              userRole === 'admin'
+                ? `<button class="edit-icon" onclick="editCollection(${col.id})">✏️</button>`
+                : ''
+            }
+            <div class="collection-info">
+              <img src="${col.image_url}" onclick="enlargeImage('${
+          col.image_url
+        }')" class="collection-img" />
+              <div>
+                <h2>${col.name}</h2>
+                <p><span class="collection-tag">${col.size}er Serie</span> ${
+          col.description || ''
+        }</p>
+              </div>
+            </div>
+          </div>
+          <div class="clipper-grid">
+        `
+
+        for (let i = 1; i <= col.size; i++) {
+          const isOwned = ownedSet.has(i)
+          html += `
+            <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+                data-col-id="${col.id}" data-position="${i}">
+              <img src="clipper_silhouette_transparent.png" class="clipper-silhouette" alt="Clipper">
+              <span>#${i}</span>
+            </div>
+          `
+        }
+
+        html += `</div>
+          <div class="progress">
+            <span>${ownedSet.size} von ${col.size} markiert</span>
+            <progress max="${col.size}" value="${ownedSet.size}"></progress>
+          </div>
+        `
+
+        card.classList.remove('editing')
+        card.classList.add('restoring')
+
+        setTimeout(() => {
+          card.classList.remove('restoring')
+        }, 200)
+
+        card.innerHTML = html
+
+        // Slot-Klick-Verhalten reaktivieren
+        card.querySelectorAll('.clipper-slot').forEach((slot) => {
+          slot.addEventListener('click', async (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+
+            const colId = parseInt(slot.dataset.colId)
+            const pos = parseInt(slot.dataset.position)
+            const owned = !slot.classList.contains('owned') ? 1 : 0
+
+            await fetch('/api/ownership', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ collection_id: colId, position: pos, owned })
+            })
+
+            slot.classList.toggle('owned', !!owned)
+            const progressBar = slot.closest('.card').querySelector('progress')
+            const label = slot.closest('.card').querySelector('.progress span')
+            const ownedNow = slot.closest('.card').querySelectorAll('.clipper-slot.owned').length
+            const max = parseInt(progressBar.getAttribute('max'))
+            progressBar.value = ownedNow
+            label.textContent = `${ownedNow} von ${max} markiert`
+          })
+        })
+      }
+
+      async function saveCollectionEdit(id) {
+        const name = document.getElementById(`edit_name_${id}`).value
+        const description = document.getElementById(`edit_desc_${id}`).value
+        const imageUrlInput = document.getElementById(`edit_img_url_${id}`).value
+        const imageFile = document.getElementById(`edit_img_file_${id}`).files[0]
+        let image_url = imageUrlInput
+
+        // Falls ein neues Bild hochgeladen wurde, hat das Vorrang
+        if (imageFile) {
+          const formData = new FormData()
+          formData.append('image', imageFile)
+
+          const uploadRes = await fetch('/api/upload-image', {
+            method: 'POST',
+            body: formData
+          })
+
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json()
+            image_url = uploadData.image_url
+
+            // 💥 Bild-URL-Feld leeren
+            document.getElementById(`edit_img_url_${id}`).value = ''
+
+            // 🖼 Vorschau aktualisieren
+            const previewImg = document.getElementById(`edit_img_preview_${id}`)
+            if (previewImg) {
+              previewImg.src = image_url
+            }
+          } else {
+            alert('Bild-Upload fehlgeschlagen')
+            return
+          }
+        }
+        const size = parseInt(document.getElementById(`edit_size_${id}`).value)
+
+        await fetch(`/api/collections/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description, image_url, size })
+        })
+
+        fetchCollections()
+      }
+
+      function toggleTheme() {
+        const body = document.body
+        const themeBtn = document.getElementById('themeToggleBtn')
+        const isDark = body.dataset.theme === 'dark'
+
+        body.dataset.theme = isDark ? 'light' : 'dark'
+        themeBtn.textContent = isDark ? '🌙' : '☀️'
+
+        localStorage.setItem('clipper-theme', body.dataset.theme)
+      }
+
+      // Lade beim Start das Theme aus dem localStorage
+      window.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('clipper-theme') || 'light'
+        document.body.dataset.theme = savedTheme
+        document.getElementById('themeToggleBtn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'
+      })
+
+      // Prüfe beim Laden, ob eine Session besteht
+      window.addEventListener('DOMContentLoaded', async () => {
+        const savedTheme = localStorage.getItem('clipper-theme') || 'light'
+        document.body.dataset.theme = savedTheme
+        document.getElementById('themeToggleBtn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'
+
+        // Neue Session-Prüfung
+        try {
+          const res = await fetch('/api/session')
+          const data = await res.json()
+
+          if (data.loggedIn) {
+            userRole = data.role
+            document.getElementById('loginContainer').style.display = 'none'
+            document.getElementById('appContainer').style.display = 'block'
+            if (userRole === 'admin') {
+              document.getElementById('collectionForm').style.display = 'block'
+            }
+            fetchCollections()
+          }
+        } catch (e) {
+          console.error('Session-Prüfung fehlgeschlagen:', e)
+        }
+      })
+
+      async function deleteCollection(id) {
+        const res = await fetch(`/api/collections/${id}`, {
+          method: 'DELETE'
+        })
+
+        if (res.ok) {
+          currentEditId = null // 🧹 Edit-Zustand zurücksetzen
+          fetchCollections()
+        } else {
+          alert('Fehler beim Löschen')
+        }
+      }
+    </script>
+  </body>
+</html>
