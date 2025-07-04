@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clipper Collection Tracker</title>
+    <title>Clipper-Liebe</title>
     <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/theme-transition.css" />
     <link
@@ -40,13 +40,38 @@
         <div class="clipper-header">
           <img src="images/clipper_logo.png" alt="Clipper Logo" class="clipper-logo" />
           <span class="clipper-title">
-            Meine
-            <strong>Clipper Collections</strong>
+            <strong>Clipper-Liebe vereint.</strong>
+            Die große Sammlung – mit deinem ganz eigenen Platz.
           </span>
         </div>
         <div style="display: flex; gap: 10px; justify-content: flex-end">
           <button id="themeToggleBtn" onclick="toggleTheme()">🌙</button>
-          <button id="logoutBtn" class="logout-button">🚪 Logout</button>
+          <div class="user-menu" id="userMenu">
+            <button id="userBtn" class="user-button">
+              <img
+                id="avatarImg"
+                src="/images/default_avatar.png"
+                alt="Avatar"
+                class="avatar-icon"
+              />
+              <span id="userName">Nutzer</span>
+            </button>
+            <div class="user-dropdown" id="userDropdown">
+              <label class="upload-avatar-label">
+                <i class="fa-solid fa-upload"></i>
+                Avatar hochladen
+                <input type="file" id="avatarUpload" accept="image/*" hidden />
+              </label>
+              <a href="#" id="profileLink">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Mein Profil
+              </a>
+              <button id="logoutBtn">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                Logout
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -135,34 +160,48 @@
 
         const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || ''
         const sizeFilter = document.getElementById('sizeFilter')?.value || ''
-        const completionFilter = document.getElementById('completionFilter')?.value || ''
+        const filterSelect = document.getElementById('completionFilter')
+        let completionFilter = filterSelect?.value || ''
         const container = document.getElementById('collections')
         container.innerHTML = ''
 
-        const filtered = collections.filter((col) => {
-          const matchesName = col.name.toLowerCase().includes(searchTerm)
-          const matchesSize =
-            sizeFilter === '' ||
-            (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) ||
-            parseInt(sizeFilter) === col.size
+        // Hilfsfunktion für Filter-Logik
+        const applyFilter = (mode) =>
+          collections.filter((col) => {
+            const matchesName = col.name.toLowerCase().includes(searchTerm)
+            const matchesSize =
+              sizeFilter === '' ||
+              (sizeFilter === 'custom' && ![2, 4, 8].includes(col.size)) ||
+              parseInt(sizeFilter, 10) === col.size
 
-          const ownedCount = (ownershipMap.get(col.id) || new Set()).size
-          let matchesCompletion = true
-          switch (completionFilter) {
-            case 'complete':
-              matchesCompletion = ownedCount === col.size
-              break
-            case 'incomplete':
-              matchesCompletion = ownedCount < col.size
-              break
-            case 'mine':
-              matchesCompletion = ownedCount > 0
-              break
-          }
+            const ownedCount = (ownershipMap.get(col.id) || new Set()).size
+            let matchesCompletion = true
+            switch (mode) {
+              case 'complete':
+                matchesCompletion = ownedCount === col.size
+                break
+              case 'incomplete':
+                matchesCompletion = ownedCount < col.size
+                break
+              case 'mine':
+                matchesCompletion = ownedCount > 0
+                break
+            }
 
-          return matchesName && matchesSize && matchesCompletion
-        })
+            return matchesName && matchesSize && matchesCompletion
+          })
 
+        // Erste Filterung
+        let filtered = applyFilter(completionFilter)
+
+        // Fallback: wenn "Meine Kollektionen" leer ist, auf "Alle" umschalten
+        if (completionFilter === 'mine' && filtered.length === 0) {
+          completionFilter = ''
+          if (filterSelect) filterSelect.value = ''
+          filtered = applyFilter(completionFilter)
+        }
+
+        // Rendern der gefilterten Collections
         for (const col of filtered) {
           const ownedSet = ownershipMap.get(col.id) || new Set()
 
@@ -174,54 +213,55 @@
           card.classList.add(`size-${col.size}`)
 
           let html = `
-          <div class="collection-header">
-            <div class="collection-info">
-              <img
-                src="${col.image_url}"
-                onclick="enlargeImage('${col.image_url}')"
-                class="collection-img"
-              />
-              <div>
-                <h2>${col.name}</h2>
-                <p>
-                  <span class="collection-tag">${col.size}er Serie</span>
-                  ${col.description || ''}
-                </p>
-              </div>
-            </div>
-            ${
-              userRole === 'admin'
-                ? `<div class="collection-actions">
-                     <button
-                       class="menu-trigger"
-                       aria-label="Mehr Aktionen"
-                       onclick="openContextMenu(event, ${col.id})">
-                       ⋮
-                     </button>
-                   </div>`
-                : ''
-            }
+      <div class="collection-header">
+        <div class="collection-info">
+          <img
+            src="${col.image_url}"
+            onclick="enlargeImage('${col.image_url}')"
+            class="collection-img"
+          />
+          <div>
+            <h2>${col.name}</h2>
+            <p>
+              <span class="collection-tag">${col.size}er Serie</span>
+              ${col.description || ''}
+            </p>
           </div>
-          <div class="clipper-grid">
-          `
+        </div>
+        ${
+          userRole === 'admin'
+            ? `<div class="collection-actions">
+                 <button
+                   class="menu-trigger"
+                   aria-label="Mehr Aktionen"
+                   onclick="openContextMenu(event, ${col.id})">
+                   ⋮
+                 </button>
+               </div>`
+            : ''
+        }
+      </div>
+      <div class="clipper-grid">
+    `
           for (let i = 1; i <= col.size; i++) {
             const isOwned = ownedSet.has(i)
             html += `
-                                <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-                                    data-col-id="${col.id}" data-position="${i}">
-                                  <img src="/uploads/clippers/collection_${
-                                    col.id
-                                  }_${i}.jpg?t=${Date.now()}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
-                                </div>
-                              `
+        <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
+             data-col-id="${col.id}" data-position="${i}">
+          <img src="/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}"
+               class="clipper-silhouette"
+               alt="Clipper"
+               onerror="this.src='images/clipper_silhouette_transparent.png'">
+        </div>
+      `
           }
           html += `
-          </div>
-          <div class="progress">
-            <span>${ownedSet.size} von ${col.size} markiert</span>
-            <progress max="${col.size}" value="${ownedSet.size}"></progress>
-          </div>
-        `
+      </div>
+      <div class="progress">
+        <span>${ownedSet.size} von ${col.size} markiert</span>
+        <progress max="${col.size}" value="${ownedSet.size}"></progress>
+      </div>
+    `
           card.innerHTML = html
           container.appendChild(card)
 
@@ -651,23 +691,18 @@
         localStorage.setItem('clipper-theme', body.dataset.theme)
       }
 
-      // Lade beim Start das Theme aus dem localStorage
-      window.addEventListener('DOMContentLoaded', () => {
-        const savedTheme = localStorage.getItem('clipper-theme') || 'light'
-        document.body.dataset.theme = savedTheme
-        document.getElementById('themeToggleBtn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'
-      })
-
       // Prüfe beim Laden, ob eine Session besteht
       window.addEventListener('DOMContentLoaded', async () => {
         const savedTheme = localStorage.getItem('clipper-theme') || 'light'
         document.body.dataset.theme = savedTheme
-        document.getElementById('themeToggleBtn').textContent = savedTheme === 'dark' ? '☀️' : '🌙'
-        document.getElementById('completionFilter').value = 'mine'
-        // Neue Session-Prüfung
+        const themeBtn = document.getElementById('themeToggleBtn')
+        if (themeBtn) themeBtn.textContent = savedTheme === 'dark' ? '☀️' : '🌙'
+
         try {
           const res = await fetch('/api/session')
           const data = await res.json()
+
+          console.log('[Session-Daten]', data) // Debug-Ausgabe
 
           if (data.loggedIn) {
             userRole = data.role
@@ -676,10 +711,36 @@
             if (userRole === 'admin') {
               document.getElementById('collectionForm').style.display = 'block'
             }
+
+            // 💥 Benutzername setzen
+            const userBtn = document.getElementById('userBtn')
+            const profileLink = document.getElementById('profileLink')
+            const userNameSpan = document.getElementById('userName')
+            if (userNameSpan && data.username) {
+              userNameSpan.textContent = data.username
+            }
+            if (profileLink && data.username) {
+              profileLink.href = `profile.html?u=${data.username}`
+            }
+
             fetchCollections()
           }
-        } catch (e) {
-          console.error('Session-Prüfung fehlgeschlagen:', e)
+        } catch (err) {
+          console.error('Fehler bei /api/session:', err)
+        }
+      })
+
+      // Benutzer-Dropdown auf- und zuklappen
+      document.getElementById('userBtn').addEventListener('click', () => {
+        const dd = document.getElementById('userDropdown')
+        dd.style.display = dd.style.display === 'block' ? 'none' : 'block'
+      })
+
+      // Klick außerhalb schließt Dropdown
+      document.addEventListener('click', (e) => {
+        const menu = document.getElementById('userMenu')
+        if (!menu.contains(e.target)) {
+          document.getElementById('userDropdown').style.display = 'none'
         }
       })
 
@@ -726,6 +787,32 @@
       function removeContextMenu() {
         document.querySelectorAll('.context-menu').forEach((m) => m.remove())
       }
+
+      const avatarImg = document.getElementById('avatarImg')
+      const avatarUpload = document.getElementById('avatarUpload')
+
+      // 🔁 Avatar im localStorage speichern
+      const savedAvatar = localStorage.getItem('user-avatar')
+      if (savedAvatar) {
+        avatarImg.src = savedAvatar
+      }
+
+      if (!savedAvatar || savedAvatar === 'undefined' || savedAvatar === '') {
+        avatarImg.src = '/images/default_avatar.png'
+      }
+
+      avatarUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = function (event) {
+          const dataUrl = event.target.result
+          avatarImg.src = dataUrl
+          localStorage.setItem('user-avatar', dataUrl)
+        }
+        reader.readAsDataURL(file)
+      })
     </script>
   </body>
 </html>

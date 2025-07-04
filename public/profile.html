@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profil</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h1 id="profileHeader">Profil</h1>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 12px">
+        <button id="themeToggleBtn" onclick="toggleTheme()">🌙</button>
+      </div>
+    </div>
+
+    <div id="collections" class="collections"></div>
+
+    <script>
+      const urlParams = new URLSearchParams(window.location.search)
+      const username = urlParams.get('u')
+
+      const container = document.getElementById('collections')
+      const header = document.getElementById('profileHeader')
+
+      if (!username) {
+        header.textContent = '❌ Kein Benutzer angegeben'
+      } else {
+        fetch(`/api/user/${username}`)
+          .then((res) => {
+            if (!res.ok) throw new Error()
+            return res.json()
+          })
+          .then(({ username, collections, ownerships }) => {
+            header.textContent = `Sammlung von ${username}`
+
+            const map = new Map()
+            for (const o of ownerships) {
+              if (!map.has(o.collection_id)) map.set(o.collection_id, new Set())
+              if (o.owned) map.get(o.collection_id).add(o.position)
+            }
+
+            for (const col of collections) {
+              const owned = map.get(col.id) || new Set()
+              if (owned.size === 0) continue // 🚫 überspringe leere Sammlungen
+              const card = document.createElement('div')
+              card.className = 'card'
+              const width = col.size * 60 + (col.size - 1) * 10 + 40
+              card.setAttribute('style', `width: ${width}px`)
+
+              let html = `
+                <div class="collection-header">
+                  <div class="collection-info">
+                    <img src="${col.image_url}" class="collection-img" />
+                    <div class="collection-text">
+                      <h2>${col.name}</h2>
+                      <p><span class="collection-tag">${col.size}er Serie</span> ${
+                col.description || ''
+              }</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="clipper-grid">
+              `
+
+              for (let i = 1; i <= col.size; i++) {
+                const isOwned = owned.has(i)
+                html += `
+                  <div class="clipper-slot ${isOwned ? 'owned' : ''}">
+                    <img src="/uploads/clippers/collection_${
+                      col.id
+                    }_${i}.jpg" class="clipper-silhouette" alt="Clipper" onerror="this.src='clipper_silhouette_transparent.png'">
+                    <span>#${i}</span>
+                  </div>
+                `
+              }
+
+              html += `</div>
+                <div class="progress">
+                  <span>${owned.size} von ${col.size} markiert</span>
+                  <progress max="${col.size}" value="${owned.size}"></progress>
+                </div>
+              `
+
+              card.innerHTML = html
+              container.appendChild(card)
+            }
+          })
+          .catch(() => {
+            header.textContent = '❌ Profil nicht gefunden'
+          })
+      }
+      function toggleTheme() {
+        const body = document.body
+        const themeBtn = document.getElementById('themeToggleBtn')
+        const isDark = body.dataset.theme === 'dark'
+
+        body.dataset.theme = isDark ? 'light' : 'dark'
+        themeBtn.textContent = isDark ? '🌙' : '☀️'
+
+        localStorage.setItem('clipper-theme', body.dataset.theme)
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('clipper-theme') || 'light'
+        document.body.dataset.theme = savedTheme
+        const themeBtn = document.getElementById('themeToggleBtn')
+        if (themeBtn) themeBtn.textContent = savedTheme === 'dark' ? '☀️' : '🌙'
+      })
+    </script>
+  </body>
+</html>

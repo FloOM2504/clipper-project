@@ -8,14 +8,10 @@ const db = new sqlite3.Database('./db.sqlite')
 router.post('/register', async (req, res) => {
   const { username, password } = req.body
   const hash = await bcrypt.hash(password, 10)
-  db.run(
-    'INSERT INTO users (username, password) VALUES (?, ?)',
-    [username, hash],
-    function (err) {
-      if (err) return res.status(400).json({ error: 'Benutzer existiert bereits' })
-      res.json({ success: true })
-    }
-  )
+  db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hash], function (err) {
+    if (err) return res.status(400).json({ error: 'Benutzer existiert bereits' })
+    res.json({ success: true })
+  })
 })
 
 // Login
@@ -27,6 +23,7 @@ router.post('/login', (req, res) => {
     }
 
     req.session.userId = user.id
+    req.session.username = user.username
     req.session.role = user.role
 
     if (remember) {

@@ -210,4 +210,26 @@ router.delete('/collections/:id', requireLogin, requireAdmin, async (req, res) =
   }
 })
 
+router.get('/user/:username', (req, res) => {
+  const username = req.params.username
+
+  db.get('SELECT id FROM users WHERE username = ?', [username], (err, user) => {
+    if (err || !user) return res.status(404).json({ error: 'User nicht gefunden' })
+
+    db.all('SELECT * FROM collections', [], (err2, collections) => {
+      if (err2) return res.status(500).send(err2)
+
+      db.all(
+        'SELECT collection_id, position, owned FROM ownership WHERE user_id = ?',
+        [user.id],
+        (err3, ownerships) => {
+          if (err3) return res.status(500).send(err3)
+
+          res.json({ username, collections, ownerships })
+        }
+      )
+    })
+  })
+})
+
 module.exports = router

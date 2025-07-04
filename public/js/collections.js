@@ -1,14 +1,14 @@
 // Fetch & Render der Kollektionen
 async function fetchCollections() {
   const res = await fetch('/api/collections')
-  const data = await res.json()
+  const { collections, ownerships } = await res.json()
 
   const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || ''
   const sizeFilter = document.getElementById('sizeFilter')?.value || ''
   const container = document.getElementById('collections')
   container.innerHTML = ''
 
-  const filtered = data.filter((col) => {
+  const filtered = collections.filter((col) => {
     const matchesName = col.name.toLowerCase().includes(searchTerm)
     const matchesSize =
       sizeFilter === '' ||

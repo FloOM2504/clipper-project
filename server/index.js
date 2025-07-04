@@ -6,13 +6,15 @@ const app = express()
 
 app.use(express.json())
 app.use(express.static(path.join(__dirname, '../public')))
-app.use(session({
-  store: new SQLiteStore({ db: 'sessions.sqlite' }),
-  secret: 'clipper_secret_key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: null }
-}))
+app.use(
+  session({
+    store: new SQLiteStore({ db: 'sessions.sqlite' }),
+    secret: 'clipper_secret_key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: null }
+  })
+)
 
 // Module einbinden
 require('./db')
@@ -23,7 +25,11 @@ app.use('/api', require('./upload'))
 
 app.get('/api/session', (req, res) => {
   if (req.session.userId) {
-    return res.json({ loggedIn: true, role: req.session.role })
+    return res.json({
+      loggedIn: true,
+      role: req.session.role,
+      username: req.session.username
+    })
   }
   res.json({ loggedIn: false })
 })
