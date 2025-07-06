@@ -740,6 +740,8 @@ input,
   max-height: 100%; /* Bild darf bis ganz oben/unten gehen */
   width: auto; /* proportional skalieren */
   object-fit: contain; /* kein Abschneiden, kein Verzerren */
+  margin-top: auto; /* wenn Bild kleiner ist: zentrieren */
+  margin-bottom: auto; /* oben/unten gleich viel Abstand */
 }
 
 /* ————————————————————————————
@@ -1206,4 +1208,60 @@ body[data-theme='dark'] .new-col-collapsible .form-container button[type='submit
 body[data-theme='dark'] .new-col-collapsible .collection-type-group .type-option:hover {
   background-color: #fdd835;
   color: #000;
+}
+
+/* ─────────────────────────────────────────────────
+   Pagination & Controls
+───────────────────────────────────────────────── */
+.controls {
+  margin: 1rem 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+.controls select {
+  /* sorgt dafür, dass ihr Select alle input-like Styles bekommt */
+  box-sizing: border-box;
+  padding: 10px 14px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  font-size: 15px;
+  line-height: 1.2;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg%20viewBox='0%200%204%205'%20xmlns='http://www.w3.org/2000/svg'%3E%3Cpath%20d='M2%205L0%200h4z'%20fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px;
+}
+.pagination {
+  display: flex;
+  list-style: none;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem 0;
+  padding: 0;
+}
+.pagination li {
+  cursor: pointer;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.pagination li.active {
+  font-weight: bold;
+  border-color: #000;
+}
+body[data-theme='dark'] .controls select {
+  background-color: #2c2c2e;
+  border-color: #444;
+  color: #f5f5f7;
+}
+.pagination li.dots {
+  cursor: default;
+  border: none;
+  background: none;
+  padding: 0 0.5rem;
 }

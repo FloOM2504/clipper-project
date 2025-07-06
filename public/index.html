@@ -128,6 +128,19 @@
         </select>
       </div>
 
+      <!-- ① Filter-Steuerung oben -->
+      <div class="controls">
+        <label for="pageSizeSelect">Sets pro Seite:</label>
+        <select id="pageSizeSelect" class="input-like select-like">
+          <option value="20">20</option>
+          <option value="35">35</option>
+          <option value="50" selected>50</option>
+          <option value="75">75</option>
+          <option value="100">100</option>
+          <option value="all">Alle</option>
+        </select>
+      </div>
+
       <div id="collections"></div>
     </div>
 
@@ -135,17 +148,74 @@
       <span class="modal-close">×</span>
       <img class="modal-content" id="modalImage" />
     </div>
+
+    <!-- ③ Paginierung unten -->
+    <ul id="pagination" class="pagination"></ul>
     <script src="/js/collections.js"></script>
     <script src="/js/ui.js"></script>
     <script src="/js/main.js"></script>
     <script>
       let userRole = null
       let currentEditId = null
+      let currentPage = 1
+      const pageSizeSelect = document.getElementById('pageSizeSelect')
+      const pagination = document.getElementById('pagination')
 
       function toggleCustomSize(select) {
         document.getElementById('custom_size').style.display =
           select.value === 'custom' ? 'block' : 'none'
       }
+
+      // Baut unten die Seitenzahlen
+      function renderPagination(totalPages) {
+        pagination.innerHTML = ''
+        if (pageSizeSelect.value === 'all' || totalPages <= 1) return
+
+        const delta = 3
+        const pages = []
+
+        const startPage = Math.max(1, currentPage - delta)
+        const endPage = Math.min(totalPages, currentPage + delta)
+
+        // immer erste Seite
+        if (startPage > 1) {
+          pages.push(1)
+          if (startPage > 2) pages.push('dots')
+        }
+
+        // Window rund um currentPage
+        for (let i = startPage; i <= endPage; i++) {
+          pages.push(i)
+        }
+
+        // immer letzte Seite
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) pages.push('dots')
+          pages.push(totalPages)
+        }
+
+        // actual rendering
+        pages.forEach((p) => {
+          const li = document.createElement('li')
+          if (p === 'dots') {
+            li.textContent = '…'
+            li.className = 'dots'
+          } else {
+            li.textContent = p
+            li.className = p === currentPage ? 'active' : ''
+            li.addEventListener('click', () => {
+              currentPage = p
+              fetchCollections()
+            })
+          }
+          pagination.appendChild(li)
+        })
+      }
+
+      pageSizeSelect.addEventListener('change', () => {
+        currentPage = 1
+        fetchCollections()
+      })
 
       async function fetchCollections() {
         const res = await fetch('/api/collections')
@@ -198,6 +268,13 @@
         // Erste Filterung
         let filtered = applyFilter(completionFilter)
 
+        // **Pagination**: slice das Array nach currentPage + pageSize
+        const val = pageSizeSelect.value
+        const pageSize = val === 'all' ? filtered.length : parseInt(val, 10)
+        const totalPages = Math.ceil(filtered.length / pageSize) || 1
+        const start = (currentPage - 1) * pageSize
+        const paged = filtered.slice(start, start + pageSize)
+
         // Fallback: wenn "Meine Kollektionen" leer ist, auf "Alle" umschalten
         if (completionFilter === 'mine' && filtered.length === 0) {
           completionFilter = ''
@@ -206,7 +283,7 @@
         }
 
         // Rendern der gefilterten Collections
-        for (const col of filtered) {
+        for (const col of paged) {
           const ownedSet = ownershipMap.get(col.id) || new Set()
 
           const card = document.createElement('div')
@@ -217,57 +294,58 @@
           card.classList.add(`size-${col.size}`)
 
           let html = `
-      <div class="collection-header">
-        <div class="collection-info">
-          <img
-            src="${col.image_url}"
-            onclick="enlargeImage('${col.image_url}')"
-            class="collection-img"
-          />
-          <div>
-            <h2>${col.name}</h2>
-            <p>
-              <span class="collection-tag">${col.size}er Serie</span>
-              ${col.description || ''}
-            </p>
+        <div class="collection-header">
+          <div class="collection-info">
+            <img
+              src="${col.image_url}"
+              onclick="enlargeImage('${col.image_url}')"
+              class="collection-img"
+            />
+            <div>
+              <h2>${col.name}</h2>
+              <p>
+                <span class="collection-tag">${col.size}er Serie</span>
+                ${col.description || ''}
+              </p>
+            </div>
           </div>
+          ${
+            userRole === 'admin'
+              ? `<div class="collection-actions">
+                   <button
+                     class="menu-trigger"
+                     aria-label="Mehr Aktionen"
+                     onclick="openContextMenu(event, ${col.id})">
+                     ⋮
+                   </button>
+                 </div>`
+              : ''
+          }
         </div>
-        ${
-          userRole === 'admin'
-            ? `<div class="collection-actions">
-                 <button
-                   class="menu-trigger"
-                   aria-label="Mehr Aktionen"
-                   onclick="openContextMenu(event, ${col.id})">
-                   ⋮
-                 </button>
-               </div>`
-            : ''
-        }
-      </div>
-      <div class="clipper-grid">
-    `
+        <div class="clipper-grid">
+      `
           for (let i = 1; i <= col.size; i++) {
             const isOwned = ownedSet.has(i)
             html += `
-        <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-             data-col-id="${col.id}" data-position="${i}">
-          <img src="/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}"
-               class="clipper-silhouette"
-               alt="Clipper"
-               onerror="this.src='images/clipper_silhouette_transparent.png'">
-        </div>
-      `
+          <div class="clipper-slot ${isOwned ? 'owned' : ''}"
+               data-col-id="${col.id}" data-position="${i}">
+            <img src="/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}"
+                 class="clipper-silhouette"
+                 alt="Clipper"
+                 onerror="this.src='images/clipper_silhouette_transparent.png'">
+          </div>
+        `
           }
           html += `
-      </div>
-      <div class="progress">
-        <span>${ownedSet.size} von ${col.size} markiert</span>
-        <progress max="${col.size}" value="${ownedSet.size}"></progress>
-      </div>
-    `
+        </div>
+        <div class="progress">
+          <span>${ownedSet.size} von ${col.size} markiert</span>
+          <progress max="${col.size}" value="${ownedSet.size}"></progress>
+        </div>
+      `
           card.innerHTML = html
           container.appendChild(card)
+          renderPagination(totalPages)
 
           if (ownedSet.size === col.size) {
             card.classList.add('complete')
@@ -466,13 +544,13 @@
         [2, 4, 8]
           .map(
             (n) => `
-        <button type="button" class="type-option" data-value="${n}">${n}er</button>
-      `
+          <button type="button" class="type-option" data-value="${n}">${n}er</button>
+        `
           )
           .join('') +
         `
-        <button type="button" class="type-option" data-value="custom">Sonder</button>
-      `
+          <button type="button" class="type-option" data-value="custom">Sonder</button>
+        `
 
       document.getElementById('collection_type').style.display = 'none'
       document.getElementById('collection_type').insertAdjacentElement('afterend', typeGroup)
@@ -505,29 +583,29 @@
         if (!card || !col) return
         const safeName = (col.name || '').replace(/"/g, '&quot;')
         card.innerHTML = `
-          <div class="collection-header">…</div>
-            <div class="card-body">
-              <input type="text" id="edit_name_${id}" value="${safeName}" placeholder="Name"/>
-              <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
+            <div class="collection-header">…</div>
+              <div class="card-body">
+                <input type="text" id="edit_name_${id}" value="${safeName}" placeholder="Name"/>
+                <input type="text" id="edit_desc_${id}" value="${col.description}" placeholder="Beschreibung" />
 
-              <label>Bild-URL (optional):</label>
-              <div class="image-input-group">
-                <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
-              <label for="image_file" class="upload-label" title="Bild hochladen">
-                <i class="fa-solid fa-image"></i>
-                <input type="file" id="edit_image_file${id}" accept="image/*" hidden />
-              </label>
+                <label>Bild-URL (optional):</label>
+                <div class="image-input-group">
+                  <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
+                <label for="image_file" class="upload-label" title="Bild hochladen">
+                  <i class="fa-solid fa-image"></i>
+                  <input type="file" id="edit_image_file${id}" accept="image/*" hidden />
+                </label>
+                </div>
+                <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
+
+                <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
               </div>
-              <img id="edit_img_preview_${id}" src="${col.image_url}" class="upload-preview" />
-
-              <input type="number" id="edit_size_${id}" value="${col.size}" min="1" placeholder="Größe" />
-            </div>
-            <div class="edit-actions">
-              <button class="save-btn"    onclick="saveCollectionEdit(${id})"><i class="fa-solid fa-check"></i></button>
-              <button class="cancel-btn"  onclick="cancelCollectionEdit(${id})"><i class="fa-solid fa-xmark"></i></button>
-              <button class="delete-btn"  onclick="deleteCollection(${id})"><i class="fa-solid fa-trash"></i></button>
-            </div>
-            `
+              <div class="edit-actions">
+                <button class="save-btn"    onclick="saveCollectionEdit(${id})"><i class="fa-solid fa-check"></i></button>
+                <button class="cancel-btn"  onclick="cancelCollectionEdit(${id})"><i class="fa-solid fa-xmark"></i></button>
+                <button class="delete-btn"  onclick="deleteCollection(${id})"><i class="fa-solid fa-trash"></i></button>
+              </div>
+              `
 
         // Vorschau aktualisieren bei Datei-Upload
         const fileInput = document.getElementById(`edit_img_file_${id}`)
@@ -571,53 +649,53 @@
         if (!card) return
 
         let html = `
-            <div class="collection-header">
-              <div class="collection-info">
-                <img
-                  src="${col.image_url}"
-                  onclick="enlargeImage('${col.image_url}')"
-                  class="collection-img"
-                />
-                <div>
-                  <h2>${col.name}</h2>
-                  <p><span class="collection-tag">${col.size}er Serie</span> ${
+              <div class="collection-header">
+                <div class="collection-info">
+                  <img
+                    src="${col.image_url}"
+                    onclick="enlargeImage('${col.image_url}')"
+                    class="collection-img"
+                  />
+                  <div>
+                    <h2>${col.name}</h2>
+                    <p><span class="collection-tag">${col.size}er Serie</span> ${
           col.description || ''
         }</p>
+                  </div>
                 </div>
+                ${
+                  userRole === 'admin'
+                    ? `<div class="collection-actions">
+                        <button
+                          class="menu-trigger"
+                          aria-label="Mehr Aktionen"
+                          onclick="openContextMenu(event, ${col.id})">
+                          ⋮
+                        </button>
+                      </div>`
+                    : ''
+                }
               </div>
-              ${
-                userRole === 'admin'
-                  ? `<div class="collection-actions">
-                      <button
-                        class="menu-trigger"
-                        aria-label="Mehr Aktionen"
-                        onclick="openContextMenu(event, ${col.id})">
-                        ⋮
-                      </button>
-                    </div>`
-                  : ''
-              }
-            </div>
-            <div class="clipper-grid">
-              `
+              <div class="clipper-grid">
+                `
 
         for (let i = 1; i <= col.size; i++) {
           const isOwned = ownedSet.has(i)
           const imgUrl = `/uploads/clippers/collection_${col.id}_${i}.jpg?t=${Date.now()}`
           html += `
-                          <div class="clipper-slot ${isOwned ? 'owned' : ''}" 
-                              data-col-id="${col.id}" data-position="${i}">
-                            <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
-                          </div>
-                        `
+                            <div class="clipper-slot ${isOwned ? 'owned' : ''}"
+                                data-col-id="${col.id}" data-position="${i}">
+                              <img src="${imgUrl}" class="clipper-silhouette" alt="Clipper" onerror="this.src='images/clipper_silhouette_transparent.png'">
+                            </div>
+                          `
         }
 
         html += `</div>
-            <div class="progress">
-              <span>${ownedSet.size} von ${col.size} markiert</span>
-              <progress max="${col.size}" value="${ownedSet.size}"></progress>
-            </div>
-          `
+              <div class="progress">
+                <span>${ownedSet.size} von ${col.size} markiert</span>
+                <progress max="${col.size}" value="${ownedSet.size}"></progress>
+              </div>
+            `
         card.innerHTML = html
 
         // Slot-Klick-Verhalten reaktivieren
@@ -784,9 +862,9 @@
         const menu = document.createElement('ul')
         menu.className = 'context-menu'
         menu.innerHTML = `
-                              <li onclick="editCollection(${colId}); removeContextMenu();">Bearbeiten</li>
-                              <li onclick="deleteCollection(${colId}); removeContextMenu();">Löschen</li>
-                            `
+                                <li onclick="editCollection(${colId}); removeContextMenu();">Bearbeiten</li>
+                                <li onclick="deleteCollection(${colId}); removeContextMenu();">Löschen</li>
+                              `
         document.body.append(menu)
 
         // Positionierung
