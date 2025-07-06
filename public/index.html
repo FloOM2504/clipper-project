@@ -80,7 +80,7 @@
         <input type="text" id="description" placeholder="Beschreibung" />
         <div class="image-input-group">
           <input type="url" id="image_url" placeholder="Bild-URL der Collection (optional)" />
-          <label for="edit_image_file_${id}" class="upload-label" title="Bild hochladen">
+          <label for="image_file" class="upload-label" title="Bild hochladen">
             <i class="fa-solid fa-image"></i>
             <input type="file" id="image_file" accept="image/*" hidden />
           </label>
@@ -265,6 +265,10 @@
           card.innerHTML = html
           container.appendChild(card)
 
+          if (ownedSet.size === col.size) {
+            card.classList.add('complete')
+          }
+
           // Klickverhalten zum Markieren
           card.querySelectorAll('.clipper-slot').forEach((slot) => {
             slot.addEventListener('click', async (e) => {
@@ -288,6 +292,12 @@
               const max = parseInt(progressBar.getAttribute('max'))
               progressBar.value = ownedNow
               label.textContent = `${ownedNow} von ${max} markiert`
+              const cardEl = slot.closest('.card')
+              if (ownedNow === max) {
+                cardEl.classList.add('complete')
+              } else {
+                cardEl.classList.remove('complete')
+              }
             })
           })
         }
@@ -499,7 +509,7 @@
               <label>Bild-URL (optional):</label>
               <div class="image-input-group">
                 <input type="url" id="edit_img_url_${id}" value="${col.image_url}" placeholder="Bild-URL" />
-              <label for="edit_image_file_${id}" class="upload-label" title="Bild hochladen">
+              <label for="image_file" class="upload-label" title="Bild hochladen">
                 <i class="fa-solid fa-image"></i>
                 <input type="file" id="edit_image_file${id}" accept="image/*" hidden />
               </label>

@@ -276,6 +276,15 @@ progress::-moz-progress-bar {
   padding: 20px;
   margin-bottom: 24px;
   transition: all 0.2s ease;
+  min-width: 260px; /* Minimum-Breite */
+}
+
+.cards-container {
+  display: grid;
+  /* Mindestens 220px breit, maximal flexibel */
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; /* Abstand zwischen den Karten */
+  flex-wrap: wrap; /* Karten dürfen umbrechen */
 }
 
 .card:hover {
@@ -1091,4 +1100,9 @@ body[data-theme='dark'] .upload-avatar-label {
 body[data-theme='dark'] .upload-avatar-label:hover {
   background-color: #fdd835;
   color: black;
+}
+
+/* Karte komplett → gelber Rand */
+.card.complete {
+  border: 2px solid #fdd835;
 }
